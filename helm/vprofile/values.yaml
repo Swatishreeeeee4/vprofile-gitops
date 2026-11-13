@@ -2,16 +2,16 @@
 registry: ghcr.io/swatishreeeeee4
 app:
   image: vprofile-app
-  tag: latest
+  tag: d82dd86
   replicas: 1
 db:
   image: vprofile-db
-  tag: latest
+  tag: d82dd86
   storage: 2Gi
   existingSecret: vprofile-db-secret     # created out-of-band (kubectl), never committed
 web:
   image: vprofile-web
-  tag: latest
+  tag: d82dd86
   serviceType: LoadBalancer
 memcached:
   image: memcached:1.6
