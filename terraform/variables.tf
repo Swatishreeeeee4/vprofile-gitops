@@ -17,7 +17,7 @@ variable "kubernetes_version" {
 }
 
 variable "node_instance_type" {
-  description = "Worker node size (8 GB RAM fits the 5 app pods + Argo CD)"
+  description = "Worker node size (8 GB RAM fits the 5 app pods + Argo CD; free-tier eligible on the AWS Free plan)"
   type        = string
-  default     = "t3.large"
+  default     = "m7i-flex.large"
 }
