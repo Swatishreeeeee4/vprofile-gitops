@@ -1,0 +1,100 @@
+# CI for VProfile (GitOps style)
+#   test (Maven) -> security scan (Trivy) -> build & push 3 images to GHCR -> bump tags in the Helm chart
+# Argo CD watches helm/vprofile and deploys whatever Git says. No cloud credentials live in GitHub:
+# images go to GHCR with the built-in GITHUB_TOKEN.
+name: ci
+
+on:
+  push:
+    branches: [main]
+    paths: ["src/**", "pom.xml", "Docker-files/**", ".github/workflows/ci.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write    # commit the new image tag to the Helm chart
+  packages: write    # push images to ghcr.io
+
+env:
+  REGISTRY: ghcr.io/swatishreeeeee4
+
+concurrency:
+  group: ci-main
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21", cache: maven }
+      - name: Unit tests + package
+        run: mvn -B -q package
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy filesystem scan (dependencies, Dockerfiles, secrets)
+        run: |
+          docker run --rm -v "$PWD:/src" aquasec/trivy:latest fs \
+            --scanners vuln,secret,misconfig --severity HIGH,CRITICAL \
+            --exit-code 0 --no-progress /src | tee trivy-report.txt
+      - uses: actions/upload-artifact@v4
+        with: { name: trivy-report, path: trivy-report.txt }
+
+  images:
+    needs: [test, security-scan]
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: meta
+        run: echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - name: Build & push app image (multi-stage Maven -> Tomcat)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Docker-files/app/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/vprofile-app:${{ steps.meta.outputs.tag }},${{ env.REGISTRY }}/vprofile-app:latest
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,mode=max,scope=app
+      - name: Build & push db image
+        uses: docker/build-push-action@v6
+        with:
+          context: Docker-files/db
+          push: true
+          tags: ${{ env.REGISTRY }}/vprofile-db:${{ steps.meta.outputs.tag }},${{ env.REGISTRY }}/vprofile-db:latest
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+      - name: Build & push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: Docker-files/web
+          push: true
+          tags: ${{ env.REGISTRY }}/vprofile-web:${{ steps.meta.outputs.tag }},${{ env.REGISTRY }}/vprofile-web:latest
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+      - name: Trivy scan of the app image
+        run: |
+          docker run --rm aquasec/trivy:latest image --severity CRITICAL --exit-code 0 --no-progress \
+            ${{ env.REGISTRY }}/vprofile-app:${{ steps.meta.outputs.tag }}
+
+  update-helm:
+    needs: images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bump image tags in the Helm chart (this commit is what Argo CD deploys)
+        run: |
+          TAG=${{ needs.images.outputs.tag }}
+          sed -i -E "s/^(  tag: ).*/\1${TAG}/" helm/vprofile/values.yaml   # only app/db/web have a tag line
+          git diff --stat
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "deploy: vprofile images ${TAG}"
+          git push

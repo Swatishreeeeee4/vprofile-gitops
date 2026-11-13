@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vprodb-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ebs-gp3
+  resources:
+    requests:
+      storage: {{ .Values.db.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vprodb
+  labels: { app: vprodb }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }          # one pod at a time on a ReadWriteOnce volume
+  selector: { matchLabels: { app: vprodb } }
+  template:
+    metadata: { labels: { app: vprodb } }
+    spec:
+      containers:
+        - name: vprodb
+          image: "{{ .Values.registry }}/{{ .Values.db.image }}:{{ .Values.db.tag }}"
+          ports: [{ containerPort: 3306 }]
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.db.existingSecret }}, key: db-pass } }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/mysql, subPath: mysql }   # subPath avoids lost+found on ext4
+          readinessProbe:
+            exec: { command: ["sh", "-c", "mysqladmin ping -h 127.0.0.1 -p\"$MYSQL_ROOT_PASSWORD\""] }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources: { requests: { cpu: 100m, memory: 512Mi } }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: vprodb-data }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: vprodb }
+spec:
+  selector: { app: vprodb }
+  ports: [{ port: 3306, targetPort: 3306 }]

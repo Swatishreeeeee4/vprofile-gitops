@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: vproweb, labels: { app: vproweb } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: vproweb } }
+  template:
+    metadata: { labels: { app: vproweb } }
+    spec:
+      containers:
+        - name: nginx
+          image: "{{ .Values.registry }}/{{ .Values.web.image }}:{{ .Values.web.tag }}"
+          ports: [{ containerPort: 80 }]
+          resources: { requests: { cpu: 50m, memory: 64Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: vproweb }
+spec:
+  type: {{ .Values.web.serviceType }}   # AWS creates an internet-facing load balancer
+  selector: { app: vproweb }
+  ports: [{ port: 80, targetPort: 80 }]

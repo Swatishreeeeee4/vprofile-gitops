@@ -1,0 +1,19 @@
+# Image tags below are updated automatically by the CI pipeline (GitOps: Git is the source of truth).
+registry: ghcr.io/swatishreeeeee4
+app:
+  image: vprofile-app
+  tag: latest
+  replicas: 1
+db:
+  image: vprofile-db
+  tag: latest
+  storage: 2Gi
+  existingSecret: vprofile-db-secret     # created out-of-band (kubectl), never committed
+web:
+  image: vprofile-web
+  tag: latest
+  serviceType: LoadBalancer
+memcached:
+  image: memcached:1.6
+rabbitmq:
+  image: rabbitmq:4.0

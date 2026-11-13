@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: vprocache01, labels: { app: vprocache01 } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: vprocache01 } }
+  template:
+    metadata: { labels: { app: vprocache01 } }
+    spec:
+      containers:
+        - name: memcached
+          image: {{ .Values.memcached.image }}
+          ports: [{ containerPort: 11211 }]
+          resources: { requests: { cpu: 50m, memory: 64Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: vprocache01 }
+spec:
+  selector: { app: vprocache01 }
+  ports: [{ port: 11211, targetPort: 11211 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: vpromq01, labels: { app: vpromq01 } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: vpromq01 } }
+  template:
+    metadata: { labels: { app: vpromq01 } }
+    spec:
+      containers:
+        - name: rabbitmq
+          image: {{ .Values.rabbitmq.image }}
+          ports: [{ containerPort: 5672 }]
+          env:
+            - { name: RABBITMQ_DEFAULT_USER, value: guest }
+            - { name: RABBITMQ_DEFAULT_PASS, value: guest }
+          resources: { requests: { cpu: 100m, memory: 256Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: vpromq01 }
+spec:
+  selector: { app: vpromq01 }
+  ports: [{ port: 5672, targetPort: 5672 }]

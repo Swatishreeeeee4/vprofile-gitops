@@ -1,0 +1,23 @@
+# Argo CD Application: "keep the cluster equal to helm/vprofile in Git".
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vprofile
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io   # deleting the App also deletes what it deployed (incl. the LB)
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Swatishreeeeee4/vprofile-gitops.git   # public repo: no credentials needed
+    targetRevision: main
+    path: helm/vprofile
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vprofile
+  syncPolicy:
+    automated:
+      prune: true      # remove resources deleted from Git
+      selfHeal: true   # undo manual changes made in the cluster (Git wins)
+    syncOptions:
+      - CreateNamespace=true
