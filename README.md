@@ -90,3 +90,7 @@ cd terraform && terraform destroy
 
 GitHub Actions · GHCR · Trivy · Docker (multi-stage) · Helm · Argo CD · Kubernetes · Amazon EKS · Terraform ·
 EBS CSI / Pod Identity · Java 17/21 · Maven · Tomcat · MySQL · Memcached · RabbitMQ
+
+## Author
+
+Swatishree Barik · [github.com/Swatishreeeeee4](https://github.com/Swatishreeeeee4)
